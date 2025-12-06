@@ -2,12 +2,10 @@ package common;
 import java.io.*;
 import java.net.*;
 
-
 public class ClientConnection {
     private Socket socket;
     private ObjectOutputStream out;
     private ObjectInputStream in;
-
 
     public void connect(String serverIP, int port) throws Exception {
         socket = new Socket(serverIP, port);
@@ -15,16 +13,16 @@ public class ClientConnection {
         in = new ObjectInputStream(socket.getInputStream());
     }
 
-
-    public void sendMessage(Message msg) {
+    // ✨ [수정] synchronized 추가 (동시 전송 시 충돌 방지)
+    public synchronized void sendMessage(Message msg) {
         try {
             out.writeObject(msg);
             out.flush();
+            out.reset(); // ✨ [추가] 객체 캐시 초기화 (연속 전송 시 필수)
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
 
     public void startReceiver(MessageListener listener) {
         Thread t = new Thread(() -> {

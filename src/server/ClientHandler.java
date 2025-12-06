@@ -1,4 +1,4 @@
-package server;
+/*package server;
 
 import common.Message;
 
@@ -55,3 +55,4 @@ public class ClientHandler extends Thread {
         }
     }
 }
+*/
