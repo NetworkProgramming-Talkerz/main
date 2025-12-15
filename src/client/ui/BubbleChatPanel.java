@@ -5,78 +5,129 @@ import java.awt.*;
 
 public class BubbleChatPanel extends JPanel {
 
-    private final JPanel listPanel; // 말풍선들이 실제로 쌓이는 내부 패널
+    private final JPanel listPanel;
 
     public BubbleChatPanel() {
-        // 1. 전체 레이아웃을 BorderLayout으로 변경
         setLayout(new BorderLayout());
         setBackground(new Color(22, 22, 26));
 
-        // 2. 말풍선을 담을 리스트 패널 생성 (세로로 쌓이는 BoxLayout)
         listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
         listPanel.setBackground(new Color(22, 22, 26));
 
-        // 3. 리스트 패널을 NORTH(북쪽/상단)에 배치
-        // -> 이렇게 하면 메시지가 적을 때도 위쪽에 딱 붙어서 나옵니다.
+        // 스크롤이 필요하므로 listPanel 자체는 상단 정렬처럼 보이게
         add(listPanel, BorderLayout.NORTH);
     }
 
+    // ================= 텍스트 말풍선 =================
     public void addBubble(String text, boolean isMine) {
         BubbleMessage bubble = new BubbleMessage(text, isMine);
+        addWrapper(bubble, isMine);
+    }
 
-        // 좌우 정렬을 위한 래퍼(Wrapper) 패널
+    // ================= 이미지 말풍선 =================
+    public void addImageBubble(byte[] imgData, boolean isMine) {
+        if (imgData == null || imgData.length == 0) return;
+
+        // 1. 이미지 리사이징 (최대 폭 200px 유지)
+        ImageIcon originalIcon = new ImageIcon(imgData);
+        Image rawImg = originalIcon.getImage();
+
+        int maxWidth = 200;
+        int width = originalIcon.getIconWidth();
+        int height = originalIcon.getIconHeight();
+
+        if (width > maxWidth) {
+            double ratio = (double) width / height;
+            width = maxWidth;
+            height = (int) (width / ratio);
+        }
+        Image finalImg = rawImg.getScaledInstance(width, height, Image.SCALE_SMOOTH);
+        final int finalW = width;
+        final int finalH = height;
+
+        // 2. 둥근 모서리 이미지 패널 생성
+        JPanel imagePanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                // super.paintComponent(g); // 투명 배경을 위해 호출하지 않음
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                // 둥근 클리핑 영역 설정
+                java.awt.geom.RoundRectangle2D rounded =
+                        new java.awt.geom.RoundRectangle2D.Double(0, 0, finalW, finalH, 30, 30);
+
+                g2.setClip(rounded);
+                g2.drawImage(finalImg, 0, 0, finalW, finalH, this);
+
+                // 외곽선 (선택사항)
+                g2.setClip(null);
+                g2.setColor(new Color(0, 0, 0, 30));
+                g2.drawRoundRect(0, 0, finalW - 1, finalH - 1, 30, 30);
+            }
+
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(finalW, finalH);
+            }
+        };
+        imagePanel.setOpaque(false);
+
+        // 3. 시간 표시
+        String timeStr = java.time.LocalTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("a h:mm"))
+                .replace("AM", "오전")
+                .replace("PM", "오후");
+        JLabel timeLabel = new JLabel(timeStr);
+        timeLabel.setFont(new Font("맑은 고딕", Font.PLAIN, 10));
+        timeLabel.setForeground(Color.LIGHT_GRAY);
+
+        // 4. 배치 (이미지 + 시간)
+        JPanel bubbleBox = new JPanel();
+        bubbleBox.setLayout(new BoxLayout(bubbleBox, BoxLayout.X_AXIS));
+        bubbleBox.setOpaque(false);
+
+        // 하단 정렬
+        imagePanel.setAlignmentY(Component.BOTTOM_ALIGNMENT);
+        timeLabel.setAlignmentY(Component.BOTTOM_ALIGNMENT);
+
+        if (isMine) {
+            bubbleBox.add(timeLabel);
+            bubbleBox.add(Box.createHorizontalStrut(5));
+            bubbleBox.add(imagePanel);
+        } else {
+            bubbleBox.add(imagePanel);
+            bubbleBox.add(Box.createHorizontalStrut(5));
+            bubbleBox.add(timeLabel);
+        }
+
+        // 5. 전체 래퍼에 추가
+        addWrapper(bubbleBox, isMine);
+    }
+
+    // 공통 래퍼 및 스크롤 처리
+    private void addWrapper(Component content, boolean isMine) {
         JPanel wrapper = new JPanel(new FlowLayout(isMine ? FlowLayout.RIGHT : FlowLayout.LEFT));
         wrapper.setOpaque(false);
-        wrapper.add(bubble);
+        wrapper.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+        wrapper.add(content);
 
-        // 4. 메인 패널이 아니라 내부 listPanel에 추가해야 함
         listPanel.add(wrapper);
-
-        // 화면 갱신
         listPanel.revalidate();
         listPanel.repaint();
+        autoScroll();
+    }
 
-        // 5. ✨ 자동 스크롤 기능 (가장 중요!)
-        // 화면이 그려진 직후(invokeLater) 스크롤을 맨 아래로 내림
+    private void autoScroll() {
         SwingUtilities.invokeLater(() -> {
             try {
-                // 내 부모 중에 JScrollPane이 있는지 찾습니다.
                 JScrollPane scrollPane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, this);
-
                 if (scrollPane != null) {
                     JScrollBar vertical = scrollPane.getVerticalScrollBar();
-                    vertical.setValue(vertical.getMaximum()); // 스크롤바를 최대값(맨 아래)으로 이동
+                    vertical.setValue(vertical.getMaximum());
                 }
-            } catch (Exception e) {
-                // 스크롤바를 못 찾아도 에러 없이 무시
-            }
+            } catch (Exception ignored) {}
         });
     }
 }
-
-/*package client.ui;
-
-import javax.swing.*;
-import java.awt.*;
-
-public class BubbleChatPanel extends JPanel {
-
-    public BubbleChatPanel() {
-        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBackground(new Color(25, 25, 30));
-    }
-
-    public void addBubble(String text, boolean isMine) {
-        BubbleMessage bubble = new BubbleMessage(text, isMine);
-
-        JPanel wrapper = new JPanel(new FlowLayout(isMine ? FlowLayout.RIGHT : FlowLayout.LEFT));
-        wrapper.setOpaque(false);
-        wrapper.add(bubble);
-
-        add(wrapper);
-        revalidate();
-        repaint();
-    }
-}
-*/
