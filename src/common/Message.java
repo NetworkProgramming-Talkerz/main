@@ -11,7 +11,11 @@ public class Message implements Serializable {
         GROUP_CHAT,
         ORDER,
         TIME_UPDATE,
-        EMOJI
+        EMOJI,
+        CONNECT_NOTICE,   // ✨ 추가: 접속/퇴장 공지 전용
+        DUPLICATE_PC,  // 🔹 PC번호 중복 접속 거절
+        ADD_TIME,          // STAFF가 시간 추가할 때
+        FORCE_LOGOUT       // STAFF가 강제 종료할 때
     }
 
 
